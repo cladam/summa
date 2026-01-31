@@ -1,0 +1,12 @@
+[agent]
+provider = "gemini" # or "openai"
+model = "gemini-2.0-flash"
+persona = "You are a senior research assistant specializing in technical synthesis."
+
+[api]
+# Set via environment variables: GEMINI_API_KEY or OPENAI_API_KEY
+# gemini_key = ""
+# openai_key = ""
+
+[storage]
+path = "./data"
