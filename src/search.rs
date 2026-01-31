@@ -79,8 +79,10 @@ impl SearchIndex {
         let key_points_field = self.schema.get_field("key_points").unwrap();
         let entities_field = self.schema.get_field("entities").unwrap();
 
-        let query_parser =
-            QueryParser::for_index(&self.index, vec![title_field, key_points_field, entities_field]);
+        let query_parser = QueryParser::for_index(
+            &self.index,
+            vec![title_field, key_points_field, entities_field],
+        );
         let query = query_parser.parse_query(query_str)?;
 
         let top_docs = searcher.search(&query, &TopDocs::with_limit(limit))?;

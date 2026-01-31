@@ -1,4 +1,4 @@
-//! Summa CLI - Intelligent webpage summarization
+//! Summa CLI - Intelligent webpage summarisation
 //!
 //! The application logic is contained in lib.rs, and this file is responsible
 //! for parsing arguments and handling top-level errors.
@@ -7,7 +7,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "summa")]
-#[command(author, version, about = "TUI for intelligent webpage summarization", long_about = None)]
+#[command(author, version, about = "TUI for intelligent webpage summarisation", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,

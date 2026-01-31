@@ -4,7 +4,7 @@
 
 // TODO: Implement TUI components
 // - Input component for URL entry
-// - Loading component for progress indication  
+// - Loading component for progress indication
 // - Results component for displaying summaries
 // - Search component for querying stored summaries
 
