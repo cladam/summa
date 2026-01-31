@@ -100,11 +100,11 @@ jobs:
           
           # Rename the binary to include the target triple
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            mv medi.exe medi-${{ matrix.target }}.exe
-            echo "ASSET_NAME=medi-${{ matrix.target }}.exe" >> $GITHUB_ENV
+            mv summa.exe summa-${{ matrix.target }}.exe
+            echo "ASSET_NAME=summa-${{ matrix.target }}.exe" >> $GITHUB_ENV
           else
-            mv medi medi-${{ matrix.target }}
-            echo "ASSET_NAME=medi-${{ matrix.target }}" >> $GITHUB_ENV
+            mv summa summa-${{ matrix.target }}
+            echo "ASSET_NAME=summa-${{ matrix.target }}" >> $GITHUB_ENV
           fi
 
       - name: Upload Release Asset
