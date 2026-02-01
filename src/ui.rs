@@ -302,7 +302,7 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Draw the URL input dialogue
 fn draw_url_dialogue(frame: &mut Frame, app: &App) {
-    let area = centered_rect(60, 20, frame.area());
+    let area = centered_rect(70, 30, frame.area());
 
     // Clear the area behind the dialogue
     frame.render_widget(Clear, area);
@@ -317,21 +317,30 @@ fn draw_url_dialogue(frame: &mut Frame, app: &App) {
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(3)])
-        .margin(1)
+        .constraints([
+            Constraint::Length(1), // Label
+            Constraint::Length(1), // Spacing
+            Constraint::Length(3), // Input field
+            Constraint::Length(1), // Spacing
+            Constraint::Length(1), // Help text
+        ])
         .split(inner);
 
     let label = Paragraph::new("URL:").style(Style::default().fg(FG_MUTED));
     frame.render_widget(label, chunks[0]);
 
-    let input = Paragraph::new(app.url_input.as_str())
+    let input = Paragraph::new(format!(" {}", app.url_input))
         .style(Style::default().fg(FG_PRIMARY))
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(BORDER_ACTIVE)),
         );
-    frame.render_widget(input, chunks[1]);
+    frame.render_widget(input, chunks[2]);
+
+    let help = Paragraph::new("Press Enter to submit, Esc to cancel")
+        .style(Style::default().fg(FG_MUTED));
+    frame.render_widget(help, chunks[4]);
 }
 
 /// Draw loading indicator
