@@ -2,7 +2,7 @@
 //!
 //! Component-based pattern for high responsiveness.
 
-use crate::{agent, scraper, Config, Storage, Summary};
+use crate::{agent, scraper, Config, Storage, StoredSummary, Summary};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -13,7 +13,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
     Frame, Terminal,
 };
 use std::io;
@@ -39,6 +39,13 @@ enum AppState {
     Error(String),
 }
 
+/// Which pane is currently focused
+#[derive(Debug, Clone, PartialEq)]
+enum FocusedPane {
+    List,
+    Detail,
+}
+
 /// The main TUI application
 pub struct App {
     /// Current application state
@@ -53,6 +60,14 @@ pub struct App {
     should_quit: bool,
     /// Status message
     status: String,
+    /// List of stored summaries
+    stored_summaries: Vec<StoredSummary>,
+    /// List selection state
+    list_state: ListState,
+    /// Which pane is focused
+    focused_pane: FocusedPane,
+    /// Scroll offset for detail view
+    detail_scroll: u16,
 }
 
 impl Default for App {
@@ -63,7 +78,12 @@ impl Default for App {
             summary: None,
             source_url: None,
             should_quit: false,
-            status: "Press 'o' to open a URL, 'q' to quit".to_string(),
+            status: "Press 'o' to open URL, ↑↓ to navigate, Tab to switch panes, 'q' to quit"
+                .to_string(),
+            stored_summaries: Vec::new(),
+            list_state: ListState::default(),
+            focused_pane: FocusedPane::List,
+            detail_scroll: 0,
         }
     }
 }
@@ -74,6 +94,71 @@ impl App {
         Self::default()
     }
 
+    /// Load stored summaries from storage
+    fn load_summaries(&mut self) {
+        if let Ok(config) = Config::load() {
+            if let Ok(storage) = Storage::open(&config.storage.path) {
+                if let Ok(summaries) = storage.list_all() {
+                    self.stored_summaries = summaries;
+                    // Select first item if available
+                    if !self.stored_summaries.is_empty() {
+                        self.list_state.select(Some(0));
+                        self.update_selected_summary();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Update the displayed summary based on selection
+    fn update_selected_summary(&mut self) {
+        if let Some(index) = self.list_state.selected() {
+            if let Some(stored) = self.stored_summaries.get(index) {
+                self.summary = Some(stored.summary.clone());
+                self.source_url = Some(stored.url.clone());
+                self.detail_scroll = 0; // Reset scroll when selecting new summary
+            }
+        }
+    }
+
+    /// Select the previous item in the list
+    fn select_previous(&mut self) {
+        if self.stored_summaries.is_empty() {
+            return;
+        }
+        let i = match self.list_state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.stored_summaries.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.list_state.select(Some(i));
+        self.update_selected_summary();
+    }
+
+    /// Select the next item in the list
+    fn select_next(&mut self) {
+        if self.stored_summaries.is_empty() {
+            return;
+        }
+        let i = match self.list_state.selected() {
+            Some(i) => {
+                if i >= self.stored_summaries.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.list_state.select(Some(i));
+        self.update_selected_summary();
+    }
+
     /// Handle keyboard input
     fn handle_key(&mut self, key: KeyCode) {
         match &self.state {
@@ -82,6 +167,43 @@ impl App {
                 KeyCode::Char('o') => {
                     self.state = AppState::UrlInput;
                     self.url_input.clear();
+                }
+                KeyCode::Tab => {
+                    self.focused_pane = match self.focused_pane {
+                        FocusedPane::List => FocusedPane::Detail,
+                        FocusedPane::Detail => FocusedPane::List,
+                    };
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    if self.focused_pane == FocusedPane::List {
+                        self.select_previous();
+                    } else {
+                        // Scroll detail view up
+                        self.detail_scroll = self.detail_scroll.saturating_sub(1);
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if self.focused_pane == FocusedPane::List {
+                        self.select_next();
+                    } else {
+                        // Scroll detail view down
+                        self.detail_scroll = self.detail_scroll.saturating_add(1);
+                    }
+                }
+                KeyCode::PageUp => {
+                    if self.focused_pane == FocusedPane::Detail {
+                        self.detail_scroll = self.detail_scroll.saturating_sub(10);
+                    }
+                }
+                KeyCode::PageDown => {
+                    if self.focused_pane == FocusedPane::Detail {
+                        self.detail_scroll = self.detail_scroll.saturating_add(10);
+                    }
+                }
+                KeyCode::Home => {
+                    if self.focused_pane == FocusedPane::Detail {
+                        self.detail_scroll = 0;
+                    }
                 }
                 _ => {}
             },
@@ -139,7 +261,10 @@ impl App {
                             self.summary = Some(summary);
                             self.source_url = Some(url);
                             self.state = AppState::Main;
-                            self.status = "Press 'o' to open another URL, 'q' to quit".to_string();
+                            self.status = "Press 'o' to open URL, ↑↓ to navigate, Tab to switch panes, 'q' to quit".to_string();
+
+                            // Reload summaries list to include the new one
+                            self.load_summaries();
                         }
                         Err(e) => {
                             self.state = AppState::Error(format!("Summarisation failed: {}", e));
@@ -165,14 +290,23 @@ impl App {
 }
 
 /// Draw the UI
-fn draw(frame: &mut Frame, app: &App) {
+fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(0), Constraint::Length(1)])
         .split(frame.area());
 
-    // Main content area
-    draw_main_content(frame, app, chunks[0]);
+    // Split main area into list (left) and detail (right)
+    let main_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+        .split(chunks[0]);
+
+    // Draw summary list on the left
+    draw_summary_list(frame, app, main_chunks[0]);
+
+    // Draw detail view on the right
+    draw_detail_view(frame, app, main_chunks[1]);
 
     // Status bar
     let status =
@@ -195,12 +329,83 @@ fn draw(frame: &mut Frame, app: &App) {
     }
 }
 
-/// Draw the main content area
-fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
+/// Draw the summary list on the left
+fn draw_summary_list(frame: &mut Frame, app: &mut App, area: Rect) {
+    let is_focused = app.focused_pane == FocusedPane::List;
+    let border_color = if is_focused {
+        BORDER_ACTIVE
+    } else {
+        BORDER_QUIET
+    };
+
     let block = Block::default()
-        .title(" Summa - Webpage Summariser ")
+        .title(" Summaries ")
         .borders(Borders::ALL)
-        .style(Style::default().fg(BORDER_ACTIVE).bg(BG_DEEP));
+        .style(Style::default().fg(border_color).bg(BG_DEEP));
+
+    if app.stored_summaries.is_empty() {
+        let empty_msg = Paragraph::new("No summaries yet.\nPress 'o' to add one.")
+            .block(block)
+            .style(Style::default().fg(FG_MUTED));
+        frame.render_widget(empty_msg, area);
+        return;
+    }
+
+    let items: Vec<ListItem> = app
+        .stored_summaries
+        .iter()
+        .map(|stored| {
+            let title = &stored.summary.title;
+            let date = stored.created_at.format("%m/%d %H:%M").to_string();
+            let content = Line::from(vec![
+                Span::styled(truncate_string(title, 20), Style::default().fg(FG_PRIMARY)),
+                Span::styled(format!(" ({})", date), Style::default().fg(FG_MUTED)),
+            ]);
+            ListItem::new(content)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(block)
+        .highlight_style(
+            Style::default()
+                .fg(BG_DEEP)
+                .bg(BORDER_ACTIVE)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
+
+    frame.render_stateful_widget(list, area, &mut app.list_state);
+}
+
+/// Truncate a string to a maximum length
+fn truncate_string(s: &str, max_len: usize) -> String {
+    if s.chars().count() <= max_len {
+        s.to_string()
+    } else {
+        format!("{}…", s.chars().take(max_len - 1).collect::<String>())
+    }
+}
+
+/// Draw the detail view on the right
+fn draw_detail_view(frame: &mut Frame, app: &mut App, area: Rect) {
+    let is_focused = app.focused_pane == FocusedPane::Detail;
+    let border_color = if is_focused {
+        BORDER_ACTIVE
+    } else {
+        BORDER_QUIET
+    };
+
+    let title = if is_focused {
+        " Summary Detail (↑↓ scroll) "
+    } else {
+        " Summary Detail "
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .style(Style::default().fg(border_color).bg(BG_DEEP));
 
     if let Some(ref summary) = app.summary {
         // Display summary
@@ -230,7 +435,7 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(Span::styled(
-            format!("   {}", summary.conclusion),
+            &summary.conclusion,
             Style::default().fg(FG_PRIMARY),
         )));
         lines.push(Line::from(""));
@@ -244,7 +449,7 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
         )]));
         for point in &summary.key_points {
             lines.push(Line::from(Span::styled(
-                format!("   • {}", point),
+                format!("• {}", point),
                 Style::default().fg(FG_PRIMARY),
             )));
         }
@@ -259,7 +464,7 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
                     .add_modifier(Modifier::BOLD),
             )]));
             lines.push(Line::from(Span::styled(
-                format!("   {}", summary.entities.join(", ")),
+                summary.entities.join(", "),
                 Style::default().fg(FG_MUTED),
             )));
             lines.push(Line::from(""));
@@ -275,7 +480,7 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
             )]));
             for item in &summary.action_items {
                 lines.push(Line::from(Span::styled(
-                    format!("   • {}", item),
+                    format!("• {}", item),
                     Style::default().fg(FG_PRIMARY),
                 )));
             }
@@ -283,7 +488,8 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
 
         let paragraph = Paragraph::new(lines)
             .block(block)
-            .wrap(Wrap { trim: false });
+            .wrap(Wrap { trim: false })
+            .scroll((app.detail_scroll, 0));
         frame.render_widget(paragraph, area);
     } else {
         // Welcome message
@@ -300,11 +506,19 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
             )),
             Line::from(""),
             Line::from(vec![
-                Span::styled("  o  ", Style::default().fg(BORDER_ACTIVE)),
+                Span::styled("  o    ", Style::default().fg(BORDER_ACTIVE)),
                 Span::styled("Open a URL to summarise", Style::default().fg(FG_PRIMARY)),
             ]),
             Line::from(vec![
-                Span::styled("  q  ", Style::default().fg(BORDER_ACTIVE)),
+                Span::styled("  ↑↓   ", Style::default().fg(BORDER_ACTIVE)),
+                Span::styled("Navigate summaries", Style::default().fg(FG_PRIMARY)),
+            ]),
+            Line::from(vec![
+                Span::styled("  Tab  ", Style::default().fg(BORDER_ACTIVE)),
+                Span::styled("Switch panes", Style::default().fg(FG_PRIMARY)),
+            ]),
+            Line::from(vec![
+                Span::styled("  q    ", Style::default().fg(BORDER_ACTIVE)),
                 Span::styled("Quit", Style::default().fg(FG_PRIMARY)),
             ]),
         ];
@@ -422,10 +636,13 @@ pub async fn run() -> anyhow::Result<()> {
     // Create app state
     let mut app = App::new();
 
+    // Load saved summaries
+    app.load_summaries();
+
     // Main loop
     loop {
         // Draw UI
-        terminal.draw(|f| draw(f, &app))?;
+        terminal.draw(|f| draw(f, &mut app))?;
 
         // Handle loading state - need to process async
         if app.state == AppState::Loading {
