@@ -2,8 +2,16 @@
 //!
 //! Uses reqwest for fetching and scraper for HTML parsing.
 
+use reqwest::Client;
 use scraper::{Html, Selector};
+use std::time::Duration;
 use thiserror::Error;
+
+/// User-Agent string identifying this scraper
+const USER_AGENT: &str = concat!("summa/", env!("CARGO_PKG_VERSION"), " (https://github.com/cladam/summa)");
+
+/// Default timeout for HTTP requests
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Error, Debug)]
 pub enum ScraperError {
@@ -24,10 +32,20 @@ pub struct WebContent {
     pub text: String,
 }
 
+/// Create a configured HTTP client for scraping
+fn create_client() -> Result<Client, reqwest::Error> {
+    Client::builder()
+        .user_agent(USER_AGENT)
+        .timeout(REQUEST_TIMEOUT)
+        .build()
+}
+
 /// Fetch and extract content from a URL
 pub async fn fetch_content(url: &str) -> Result<WebContent, ScraperError> {
+    let client = create_client()?;
+
     // Fetch the HTML
-    let response = reqwest::get(url).await?;
+    let response = client.get(url).send().await?;
     let html = response.text().await?;
     let document = Html::parse_document(&html);
 
