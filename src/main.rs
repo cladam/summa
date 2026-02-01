@@ -4,7 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summa::{agent, scraper, Config};
+use summa::{agent, scraper, ui, Config};
 
 #[derive(Parser)]
 #[command(name = "summa")]
@@ -31,8 +31,6 @@ enum Commands {
     },
     /// List all stored summaries
     List,
-    /// Launch the interactive TUI
-    Tui,
 }
 
 #[tokio::main]
@@ -93,14 +91,9 @@ async fn main() -> anyhow::Result<()> {
             println!("Listing stored summaries...");
             // TODO: Implement listing
         }
-        Some(Commands::Tui) => {
-            println!("Launching TUI...");
-            // TODO: Implement TUI
-        }
         None => {
-            println!("Launching TUI...");
-            // Default to TUI mode
-            // TODO: Implement TUI
+            // Default: Launch the TUI
+            ui::run().await?;
         }
     }
 
