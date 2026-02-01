@@ -215,13 +215,13 @@ impl App {
                                 summary.title.to_lowercase().contains(&query_lower)
                                     || summary.conclusion.to_lowercase().contains(&query_lower)
                                     || summary
-                                    .key_points
-                                    .iter()
-                                    .any(|p| p.to_lowercase().contains(&query_lower))
+                                        .key_points
+                                        .iter()
+                                        .any(|p| p.to_lowercase().contains(&query_lower))
                                     || summary
-                                    .entities
-                                    .iter()
-                                    .any(|e| e.to_lowercase().contains(&query_lower))
+                                        .entities
+                                        .iter()
+                                        .any(|e| e.to_lowercase().contains(&query_lower))
                                     || stored.url.to_lowercase().contains(&query_lower)
                             })
                             .collect()
@@ -259,7 +259,8 @@ impl App {
         self.is_search_results = false;
         self.current_search_query.clear();
         self.search_input.clear();
-        self.status = "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
+        self.status =
+            "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
         self.load_summaries();
     }
 
@@ -392,7 +393,9 @@ impl App {
                             self.summary = Some(summary);
                             self.source_url = Some(url);
                             self.state = AppState::Main;
-                            self.status = "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
+                            self.status =
+                                "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit"
+                                    .to_string();
 
                             // Reload summaries list to include the new one
                             self.load_summaries();
@@ -487,7 +490,11 @@ fn draw_summary_list(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let title = if app.is_search_results {
-        format!(" Results: '{}' ({}) ", app.current_search_query, app.stored_summaries.len())
+        format!(
+            " Results: '{}' ({}) ",
+            app.current_search_query,
+            app.stored_summaries.len()
+        )
     } else {
         format!(" Summaries ({}) ", app.stored_summaries.len())
     };
@@ -766,8 +773,9 @@ fn draw_search_dialogue(frame: &mut Frame, app: &App) {
         );
     frame.render_widget(input, chunks[2]);
 
-    let help = Paragraph::new("Enter to search, Esc to cancel. Searches titles, content & entities.")
-        .style(Style::default().fg(FG_MUTED));
+    let help =
+        Paragraph::new("Enter to search, Esc to cancel. Searches titles, content & entities.")
+            .style(Style::default().fg(FG_MUTED));
     frame.render_widget(help, chunks[4]);
 }
 
