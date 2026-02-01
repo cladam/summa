@@ -2,14 +2,13 @@
 //!
 //! Uses reqwest for fetching and scraper for HTML parsing.
 
+use scraper::{Html, Selector};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum ScraperError {
     #[error("failed to fetch URL: {0}")]
-    FetchError(String),
-    #[error("failed to parse HTML: {0}")]
-    ParseError(String),
+    FetchError(#[from] reqwest::Error),
     #[error("no content found at URL")]
     NoContent,
 }
@@ -26,12 +25,86 @@ pub struct WebContent {
 }
 
 /// Fetch and extract content from a URL
-pub async fn fetch_content(_url: &str) -> Result<WebContent, ScraperError> {
-    // TODO: Implement with reqwest + scraper
-    // let response = reqwest::get(url).await?;
-    // let html = response.text().await?;
-    // let document = scraper::Html::parse_document(&html);
-    // Extract title, main content, etc.
+pub async fn fetch_content(url: &str) -> Result<WebContent, ScraperError> {
+    // Fetch the HTML
+    let response = reqwest::get(url).await?;
+    let html = response.text().await?;
+    let document = Html::parse_document(&html);
 
-    todo!("implement web scraping with reqwest + scraper")
+    // Extract title
+    let title = extract_title(&document);
+
+    // Extract main content
+    let text = extract_text(&document);
+
+    if text.trim().is_empty() {
+        return Err(ScraperError::NoContent);
+    }
+
+    Ok(WebContent {
+        url: url.to_string(),
+        title,
+        text,
+    })
+}
+
+/// Extract the page title from <title> or <h1>
+fn extract_title(document: &Html) -> Option<String> {
+    // Try <title> first
+    let title_selector = Selector::parse("title").unwrap();
+    if let Some(element) = document.select(&title_selector).next() {
+        let title: String = element.text().collect();
+        if !title.trim().is_empty() {
+            return Some(title.trim().to_string());
+        }
+    }
+
+    // Fall back to first <h1>
+    let h1_selector = Selector::parse("h1").unwrap();
+    if let Some(element) = document.select(&h1_selector).next() {
+        let title: String = element.text().collect();
+        if !title.trim().is_empty() {
+            return Some(title.trim().to_string());
+        }
+    }
+
+    None
+}
+
+/// Extract readable text content from the page
+fn extract_text(document: &Html) -> String {
+    // Try to find main content areas first
+    let main_selectors = ["article", "main", "[role='main']", ".content", "#content"];
+
+    for selector_str in main_selectors {
+        if let Ok(selector) = Selector::parse(selector_str) {
+            if let Some(element) = document.select(&selector).next() {
+                let text = extract_text_from_element(&Html::parse_fragment(&element.html()));
+                if !text.trim().is_empty() {
+                    return text;
+                }
+            }
+        }
+    }
+
+    // Fall back to extracting from body, excluding scripts/styles
+    extract_text_from_element(document)
+}
+
+/// Extract text from paragraphs and headings, excluding scripts and styles
+fn extract_text_from_element(document: &Html) -> String {
+    let content_selector = Selector::parse("p, h1, h2, h3, h4, h5, h6, li").unwrap();
+
+    let mut paragraphs: Vec<String> = Vec::new();
+
+    for element in document.select(&content_selector) {
+        let text: String = element.text().collect::<Vec<_>>().join(" ");
+        let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
+
+        if !cleaned.is_empty() && cleaned.len() > 20 {
+            paragraphs.push(cleaned);
+        }
+    }
+
+    paragraphs.join("\n\n")
 }

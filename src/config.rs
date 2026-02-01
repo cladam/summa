@@ -25,6 +25,8 @@ pub struct AgentConfig {
     pub model: String,
     /// System persona for the agent
     pub persona: String,
+    /// Prompt
+    pub prompt: String,
 }
 
 /// API keys configuration (loaded from environment)

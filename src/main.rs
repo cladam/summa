@@ -4,6 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
+use summa::scraper;
 
 #[derive(Parser)]
 #[command(name = "summa")]
@@ -15,8 +16,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Summarize a webpage by URL
-    Summarize {
+    /// Summarise a webpage by URL
+    Summarise {
         /// URL to summarize
         url: String,
     },
@@ -31,13 +32,24 @@ enum Commands {
     Tui,
 }
 
-fn main() -> anyhow::Result<()> {
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Summarize { url }) => {
-            println!("Summarizing: {}", url);
-            // TODO: Implement summarization flow
+        Some(Commands::Summarise { url }) => {
+            println!("Fetching: {}", url);
+
+            match scraper::fetch_content(&url).await {
+                Ok(content) => {
+                    println!("\n=== {} ===\n", content.title.unwrap_or_else(|| "No title".to_string()));
+                    println!("{}", content.text);
+                    println!("\n--- Extracted {} characters ---", content.text.len());
+                }
+                Err(e) => {
+                    eprintln!("Error: {}", e);
+                }
+            }
         }
         Some(Commands::Search { query }) => {
             println!("Searching for: {}", query);
