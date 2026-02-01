@@ -8,7 +8,11 @@ use std::time::Duration;
 use thiserror::Error;
 
 /// User-Agent string identifying this scraper
-const USER_AGENT: &str = concat!("summa/", env!("CARGO_PKG_VERSION"), " (https://github.com/cladam/summa)");
+const USER_AGENT: &str = concat!(
+    "summa/",
+    env!("CARGO_PKG_VERSION"),
+    " (https://github.com/cladam/summa)"
+);
 
 /// Default timeout for HTTP requests
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -44,8 +48,12 @@ fn create_client() -> Result<Client, reqwest::Error> {
 pub async fn fetch_content(url: &str) -> Result<WebContent, ScraperError> {
     let client = create_client()?;
 
-    // Fetch the HTML
-    let response = client.get(url).send().await?;
+    // Fetch the HTML, rejecting 4xx/5xx responses
+    let response = client
+        .get(url)
+        .send()
+        .await?
+        .error_for_status()?;
     let html = response.text().await?;
     let document = Html::parse_document(&html);
 

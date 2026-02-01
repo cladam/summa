@@ -42,7 +42,10 @@ async fn main() -> anyhow::Result<()> {
 
             match scraper::fetch_content(&url).await {
                 Ok(content) => {
-                    println!("\n=== {} ===\n", content.title.unwrap_or_else(|| "No title".to_string()));
+                    println!(
+                        "\n=== {} ===\n",
+                        content.title.unwrap_or_else(|| "No title".to_string())
+                    );
                     println!("{}", content.text);
                     println!("\n--- Extracted {} characters ---", content.text.len());
                 }
