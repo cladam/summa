@@ -49,11 +49,7 @@ pub async fn fetch_content(url: &str) -> Result<WebContent, ScraperError> {
     let client = create_client()?;
 
     // Fetch the HTML, rejecting 4xx/5xx responses
-    let response = client
-        .get(url)
-        .send()
-        .await?
-        .error_for_status()?;
+    let response = client.get(url).send().await?.error_for_status()?;
     let html = response.text().await?;
     let document = Html::parse_document(&html);
 
