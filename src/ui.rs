@@ -33,6 +33,8 @@ enum AppState {
     Main,
     /// URL input dialogue
     UrlInput,
+    /// Search input dialogue
+    SearchInput,
     /// Loading content
     Loading,
     /// Error state
@@ -52,6 +54,8 @@ pub struct App {
     state: AppState,
     /// URL input buffer
     url_input: String,
+    /// Search input buffer
+    search_input: String,
     /// Current summary being displayed
     summary: Option<Summary>,
     /// Source URL of the current summary
@@ -68,6 +72,10 @@ pub struct App {
     focused_pane: FocusedPane,
     /// Scroll offset for detail view
     detail_scroll: u16,
+    /// Whether we're showing search results (vs all summaries)
+    is_search_results: bool,
+    /// Current search query (for display)
+    current_search_query: String,
 }
 
 impl Default for App {
@@ -75,15 +83,17 @@ impl Default for App {
         Self {
             state: AppState::Main,
             url_input: String::new(),
+            search_input: String::new(),
             summary: None,
             source_url: None,
             should_quit: false,
-            status: "Press 'o' to open URL, ↑↓ to navigate, Tab to switch panes, 'q' to quit"
-                .to_string(),
+            status: "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string(),
             stored_summaries: Vec::new(),
             list_state: ListState::default(),
             focused_pane: FocusedPane::List,
             detail_scroll: 0,
+            is_search_results: false,
+            current_search_query: String::new(),
         }
     }
 }
@@ -159,6 +169,75 @@ impl App {
         self.update_selected_summary();
     }
 
+    /// Perform a search on stored summaries
+    fn perform_search(&mut self) {
+        let query = self.search_input.clone();
+        if query.is_empty() {
+            // Empty search clears results and shows all
+            self.is_search_results = false;
+            self.current_search_query.clear();
+            self.load_summaries();
+            return;
+        }
+
+        let query_lower = query.to_lowercase();
+
+        if let Ok(config) = Config::load() {
+            if let Ok(storage) = Storage::open(&config.storage.path) {
+                if let Ok(all_summaries) = storage.list_all() {
+                    // Filter summaries that match the query
+                    let results: Vec<StoredSummary> = all_summaries
+                        .into_iter()
+                        .filter(|stored| {
+                            let summary = &stored.summary;
+                            summary.title.to_lowercase().contains(&query_lower)
+                                || summary.conclusion.to_lowercase().contains(&query_lower)
+                                || summary
+                                .key_points
+                                .iter()
+                                .any(|p| p.to_lowercase().contains(&query_lower))
+                                || summary
+                                .entities
+                                .iter()
+                                .any(|e| e.to_lowercase().contains(&query_lower))
+                                || stored.url.to_lowercase().contains(&query_lower)
+                        })
+                        .collect();
+
+                    self.stored_summaries = results;
+                    self.is_search_results = true;
+                    self.current_search_query = query.clone();
+
+                    // Update status
+                    self.status = format!(
+                        "Found {} result(s) for '{}'. Esc to clear search.",
+                        self.stored_summaries.len(),
+                        query
+                    );
+
+                    // Select first result if any
+                    if !self.stored_summaries.is_empty() {
+                        self.list_state.select(Some(0));
+                        self.update_selected_summary();
+                    } else {
+                        self.list_state.select(None);
+                        self.summary = None;
+                        self.source_url = None;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Clear search and show all summaries
+    fn clear_search(&mut self) {
+        self.is_search_results = false;
+        self.current_search_query.clear();
+        self.search_input.clear();
+        self.status = "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
+        self.load_summaries();
+    }
+
     /// Handle keyboard input
     fn handle_key(&mut self, key: KeyCode) {
         match &self.state {
@@ -167,6 +246,16 @@ impl App {
                 KeyCode::Char('o') => {
                     self.state = AppState::UrlInput;
                     self.url_input.clear();
+                }
+                KeyCode::Char('f') => {
+                    self.state = AppState::SearchInput;
+                    self.search_input.clear();
+                }
+                KeyCode::Esc => {
+                    // Clear search results and show all
+                    if self.is_search_results {
+                        self.clear_search();
+                    }
                 }
                 KeyCode::Tab => {
                     self.focused_pane = match self.focused_pane {
@@ -225,6 +314,23 @@ impl App {
                 }
                 _ => {}
             },
+            AppState::SearchInput => match key {
+                KeyCode::Esc => {
+                    self.state = AppState::Main;
+                    self.search_input.clear();
+                }
+                KeyCode::Enter => {
+                    self.perform_search();
+                    self.state = AppState::Main;
+                }
+                KeyCode::Backspace => {
+                    self.search_input.pop();
+                }
+                KeyCode::Char(c) => {
+                    self.search_input.push(c);
+                }
+                _ => {}
+            },
             AppState::Loading => {
                 // Can't cancel loading for now
             }
@@ -261,7 +367,7 @@ impl App {
                             self.summary = Some(summary);
                             self.source_url = Some(url);
                             self.state = AppState::Main;
-                            self.status = "Press 'o' to open URL, ↑↓ to navigate, Tab to switch panes, 'q' to quit".to_string();
+                            self.status = "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
 
                             // Reload summaries list to include the new one
                             self.load_summaries();
@@ -318,6 +424,11 @@ fn draw(frame: &mut Frame, app: &mut App) {
         draw_url_dialogue(frame, app);
     }
 
+    // Draw search input dialogue if active
+    if app.state == AppState::SearchInput {
+        draw_search_dialogue(frame, app);
+    }
+
     // Draw loading indicator
     if app.state == AppState::Loading {
         draw_loading(frame);
@@ -338,8 +449,14 @@ fn draw_summary_list(frame: &mut Frame, app: &mut App, area: Rect) {
         BORDER_QUIET
     };
 
+    let title = if app.is_search_results {
+        format!(" Results: '{}' ({}) ", app.current_search_query, app.stored_summaries.len())
+    } else {
+        format!(" Summaries ({}) ", app.stored_summaries.len())
+    };
+
     let block = Block::default()
-        .title(" Summaries ")
+        .title(title)
         .borders(Borders::ALL)
         .style(Style::default().fg(border_color).bg(BG_DEEP));
 
@@ -510,6 +627,10 @@ fn draw_detail_view(frame: &mut Frame, app: &mut App, area: Rect) {
                 Span::styled("Open a URL to summarise", Style::default().fg(FG_PRIMARY)),
             ]),
             Line::from(vec![
+                Span::styled("  f    ", Style::default().fg(BORDER_ACTIVE)),
+                Span::styled("Search summaries", Style::default().fg(FG_PRIMARY)),
+            ]),
+            Line::from(vec![
                 Span::styled("  ↑↓   ", Style::default().fg(BORDER_ACTIVE)),
                 Span::styled("Navigate summaries", Style::default().fg(FG_PRIMARY)),
             ]),
@@ -567,6 +688,49 @@ fn draw_url_dialogue(frame: &mut Frame, app: &App) {
 
     let help =
         Paragraph::new("Press Enter to submit, Esc to cancel").style(Style::default().fg(FG_MUTED));
+    frame.render_widget(help, chunks[4]);
+}
+
+/// Draw the search input dialogue
+fn draw_search_dialogue(frame: &mut Frame, app: &App) {
+    let area = centered_rect(70, 30, frame.area());
+
+    // Clear the area behind the dialogue
+    frame.render_widget(Clear, area);
+
+    let block = Block::default()
+        .title(" Search Summaries ")
+        .borders(Borders::ALL)
+        .style(Style::default().fg(BORDER_ACTIVE).bg(BG_DEEP));
+
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // Label
+            Constraint::Length(1), // Spacing
+            Constraint::Length(3), // Input field
+            Constraint::Length(1), // Spacing
+            Constraint::Length(1), // Help text
+        ])
+        .split(inner);
+
+    let label = Paragraph::new("Search:").style(Style::default().fg(FG_MUTED));
+    frame.render_widget(label, chunks[0]);
+
+    let input = Paragraph::new(format!(" {}", app.search_input))
+        .style(Style::default().fg(FG_PRIMARY))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(BORDER_ACTIVE)),
+        );
+    frame.render_widget(input, chunks[2]);
+
+    let help = Paragraph::new("Enter to search, Esc to cancel. Searches titles, content & entities.")
+        .style(Style::default().fg(FG_MUTED));
     frame.render_widget(help, chunks[4]);
 }
 

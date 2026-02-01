@@ -4,7 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summa::{agent, scraper, ui, Config, Storage};
+use summa::{agent, scraper, ui, Config, SearchIndex, Storage};
 
 #[derive(Parser)]
 #[command(name = "summa")]
@@ -88,8 +88,41 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Some(Commands::Search { query }) => {
-            println!("Searching for: {}", query);
-            // TODO: Implement search
+            let config = Config::load()?;
+            let storage = Storage::open(&config.storage.path)?;
+
+            // Try to use the search index if available
+            let search_path = config.storage.path.join("search_index");
+            let results = if let Ok(search_index) = SearchIndex::open(&search_path) {
+                // Search using tantivy
+                match search_index.search(&query, 20) {
+                    Ok(urls) => urls,
+                    Err(_) => {
+                        // Fall back to simple text search
+                        simple_search(&storage, &query)?
+                    }
+                }
+            } else {
+                // Fall back to simple text search
+                simple_search(&storage, &query)?
+            };
+
+            if results.is_empty() {
+                println!("No results found for: {}", query);
+            } else {
+                println!("Search results for '{}':\n", query);
+                for url in &results {
+                    if let Ok(Some(stored)) = storage.get(url) {
+                        println!(
+                            "📄 {} ({})",
+                            stored.summary.title,
+                            stored.created_at.format("%Y-%m-%d %H:%M")
+                        );
+                        println!("   {}", stored.url);
+                        println!("   {}\n", stored.summary.conclusion);
+                    }
+                }
+            }
         }
         Some(Commands::List) => {
             let config = Config::load()?;
@@ -118,4 +151,30 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Simple text-based search fallback when tantivy index is not available
+fn simple_search(storage: &Storage, query: &str) -> anyhow::Result<Vec<String>> {
+    let query_lower = query.to_lowercase();
+    let all_summaries = storage.list_all()?;
+
+    let results: Vec<String> = all_summaries
+        .into_iter()
+        .filter(|stored| {
+            let summary = &stored.summary;
+            summary.title.to_lowercase().contains(&query_lower)
+                || summary.conclusion.to_lowercase().contains(&query_lower)
+                || summary
+                    .key_points
+                    .iter()
+                    .any(|p| p.to_lowercase().contains(&query_lower))
+                || summary
+                    .entities
+                    .iter()
+                    .any(|e| e.to_lowercase().contains(&query_lower))
+        })
+        .map(|stored| stored.url)
+        .collect();
+
+    Ok(results)
 }
