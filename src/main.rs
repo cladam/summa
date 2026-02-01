@@ -4,7 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summa::{agent, scraper, ui, Config, SearchIndex, Storage};
+use summa::{agent, scraper, ui, Config, Storage};
 
 #[derive(Parser)]
 #[command(name = "summa")]
@@ -91,21 +91,8 @@ async fn main() -> anyhow::Result<()> {
             let config = Config::load()?;
             let storage = Storage::open(&config.storage.path)?;
 
-            // Try to use the search index if available
-            let search_path = config.storage.path.join("search_index");
-            let results = if let Ok(search_index) = SearchIndex::open(&search_path) {
-                // Search using tantivy
-                match search_index.search(&query, 20) {
-                    Ok(urls) => urls,
-                    Err(_) => {
-                        // Fall back to simple text search
-                        simple_search(&storage, &query)?
-                    }
-                }
-            } else {
-                // Fall back to simple text search
-                simple_search(&storage, &query)?
-            };
+            // Use simple text search (tantivy index is not populated during storage)
+            let results = simple_search(&storage, &query)?;
 
             if results.is_empty() {
                 println!("No results found for: {}", query);
