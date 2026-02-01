@@ -1,11 +1,12 @@
 //! Summary struct - the core structured output from the LLM agent.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// Structured summary output from the LLM.
 ///
 /// This schema is enforced by rstructor, ensuring the LLM returns valid data.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Summary {
     /// Title or headline for the summarized content
     pub title: String,

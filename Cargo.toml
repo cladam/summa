@@ -38,6 +38,8 @@ reqwest = { version = "0.13.1", features = ["json"] }
 scraper = "0.25.0"
 # Async runtime
 tokio = { version = "1", features = ["full"] }
+rstructor = "0.2.7"
+schemars = "1.2.0"
 
 [lib]
 name = "summa"

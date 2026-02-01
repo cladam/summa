@@ -4,7 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summa::scraper;
+use summa::{agent, scraper, Config};
 
 #[derive(Parser)]
 #[command(name = "summa")]
@@ -20,6 +20,9 @@ enum Commands {
     Summarise {
         /// URL to summarize
         url: String,
+        /// Show raw extracted text instead of summary
+        #[arg(long)]
+        raw: bool,
     },
     /// Search stored summaries
     Search {
@@ -37,20 +40,42 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Summarise { url }) => {
+        Some(Commands::Summarise { url, raw }) => {
             println!("Fetching: {}", url);
 
-            match scraper::fetch_content(&url).await {
-                Ok(content) => {
-                    println!(
-                        "\n=== {} ===\n",
-                        content.title.unwrap_or_else(|| "No title".to_string())
-                    );
-                    println!("{}", content.text);
-                    println!("\n--- Extracted {} characters ---", content.text.len());
+            // Scrape the content
+            let content = scraper::fetch_content(&url).await?;
+            let title = content.title.clone().unwrap_or_else(|| "No title".to_string());
+
+            if raw {
+                // Just show raw extracted text
+                println!("\n=== {} ===\n", title);
+                println!("{}", content.text);
+                println!("\n--- Extracted {} characters ---", content.text.len());
+            } else {
+                // Summarise using LLM
+                println!("Summarising {} characters...\n", content.text.len());
+
+                let config = Config::load()?;
+                let summary = agent::summarize(&content.text, &config).await?;
+
+                println!("=== {} ===\n", summary.title);
+
+                println!("📌 Key Points:");
+                for point in &summary.key_points {
+                    println!("  • {}", point);
                 }
-                Err(e) => {
-                    eprintln!("Error: {}", e);
+
+                if !summary.entities.is_empty() {
+                    println!("\n🏷️  Entities:");
+                    println!("  {}", summary.entities.join(", "));
+                }
+
+                if !summary.action_items.is_empty() {
+                    println!("\n✅ Action Items:");
+                    for item in &summary.action_items {
+                        println!("  • {}", item);
+                    }
                 }
             }
         }
