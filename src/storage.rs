@@ -1,6 +1,8 @@
 //! Sled-based storage for summaries.
 
 use crate::summary::Summary;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use serde_json;
 use std::path::Path;
 use thiserror::Error;
@@ -13,6 +15,28 @@ pub enum StorageError {
     SerializationError(#[from] serde_json::Error),
     #[error("summary not found: {0}")]
     NotFound(String),
+}
+
+/// A stored summary with metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StoredSummary {
+    /// The source URL
+    pub url: String,
+    /// When the summary was created
+    pub created_at: DateTime<Utc>,
+    /// The summary itself
+    pub summary: Summary,
+}
+
+impl StoredSummary {
+    /// Create a new stored summary
+    pub fn new(url: String, summary: Summary) -> Self {
+        Self {
+            url,
+            created_at: Utc::now(),
+            summary,
+        }
+    }
 }
 
 /// Sled-based storage for webpage summaries.
@@ -32,33 +56,35 @@ impl Storage {
     /// Store a summary for a URL
     pub fn store(&self, url: &str, summary: &Summary) -> Result<(), StorageError> {
         let key = Self::hash_url(url);
-        let value = serde_json::to_vec(summary)?;
+        let stored = StoredSummary::new(url.to_string(), summary.clone());
+        let value = serde_json::to_vec(&stored)?;
         self.db.insert(key.as_bytes(), value)?;
         self.db.flush()?;
         Ok(())
     }
 
     /// Retrieve a summary by URL
-    pub fn get(&self, url: &str) -> Result<Option<Summary>, StorageError> {
+    pub fn get(&self, url: &str) -> Result<Option<StoredSummary>, StorageError> {
         let key = Self::hash_url(url);
         match self.db.get(key.as_bytes())? {
             Some(data) => {
-                let summary: Summary = serde_json::from_slice(&data)?;
-                Ok(Some(summary))
+                let stored: StoredSummary = serde_json::from_slice(&data)?;
+                Ok(Some(stored))
             }
             None => Ok(None),
         }
     }
 
-    /// List all stored URLs and their summaries
-    pub fn list_all(&self) -> Result<Vec<(String, Summary)>, StorageError> {
+    /// List all stored summaries
+    pub fn list_all(&self) -> Result<Vec<StoredSummary>, StorageError> {
         let mut results = Vec::new();
         for item in self.db.iter() {
-            let (key, value) = item?;
-            let url = String::from_utf8_lossy(&key).to_string();
-            let summary: Summary = serde_json::from_slice(&value)?;
-            results.push((url, summary));
+            let (_key, value) = item?;
+            let stored: StoredSummary = serde_json::from_slice(&value)?;
+            results.push(stored);
         }
+        // Sort by created_at descending (newest first)
+        results.sort_by(|a, b| b.created_at.cmp(&a.created_at));
         Ok(results)
     }
 
@@ -68,6 +94,11 @@ impl Storage {
         let existed = self.db.remove(key.as_bytes())?.is_some();
         self.db.flush()?;
         Ok(existed)
+    }
+
+    /// Get the number of stored summaries
+    pub fn count(&self) -> usize {
+        self.db.len()
     }
 
     /// Create a hash of the URL for use as a key

@@ -4,7 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summa::{agent, scraper, ui, Config};
+use summa::{agent, scraper, ui, Config, Storage};
 
 #[derive(Parser)]
 #[command(name = "summa")]
@@ -60,6 +60,10 @@ async fn main() -> anyhow::Result<()> {
                 let config = Config::load()?;
                 let summary = agent::summarize(&content.text, &config).await?;
 
+                // Persist the summary
+                let storage = Storage::open(&config.storage.path)?;
+                storage.store(&url, &summary)?;
+
                 println!("=== {} ===\n", summary.title);
 
                 println!("💡 Conclusion:");
@@ -88,8 +92,24 @@ async fn main() -> anyhow::Result<()> {
             // TODO: Implement search
         }
         Some(Commands::List) => {
-            println!("Listing stored summaries...");
-            // TODO: Implement listing
+            let config = Config::load()?;
+            let storage = Storage::open(&config.storage.path)?;
+            let summaries = storage.list_all()?;
+
+            if summaries.is_empty() {
+                println!("No stored summaries found.");
+            } else {
+                println!("Stored summaries ({}):\n", summaries.len());
+                for stored in summaries {
+                    println!(
+                        "📄 {} ({})",
+                        stored.summary.title,
+                        stored.created_at.format("%Y-%m-%d %H:%M")
+                    );
+                    println!("   {}", stored.url);
+                    println!("   {}\n", stored.summary.conclusion);
+                }
+            }
         }
         None => {
             // Default: Launch the TUI

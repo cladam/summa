@@ -19,4 +19,5 @@ pub mod ui;
 
 pub use config::Config;
 pub use db::{SearchIndex, Storage};
+pub use storage::StoredSummary;
 pub use summary::Summary;

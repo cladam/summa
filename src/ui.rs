@@ -2,7 +2,7 @@
 //!
 //! Component-based pattern for high responsiveness.
 
-use crate::{agent, scraper, Config, Summary};
+use crate::{agent, scraper, Config, Storage, Summary};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -130,6 +130,12 @@ impl App {
                 match Config::load() {
                     Ok(config) => match agent::summarize(&content.text, &config).await {
                         Ok(summary) => {
+                            // Persist the summary
+                            if let Err(e) = self.save_summary(&url, &summary, &config) {
+                                // Log but don't fail - storage is optional
+                                eprintln!("Warning: Failed to save summary: {}", e);
+                            }
+
                             self.summary = Some(summary);
                             self.source_url = Some(url);
                             self.state = AppState::Main;
@@ -148,6 +154,13 @@ impl App {
                 self.state = AppState::Error(format!("Failed to fetch URL: {}", e));
             }
         }
+    }
+
+    /// Save a summary to persistent storage
+    fn save_summary(&self, url: &str, summary: &Summary, config: &Config) -> anyhow::Result<()> {
+        let storage = Storage::open(&config.storage.path)?;
+        storage.store(url, summary)?;
+        Ok(())
     }
 }
 
@@ -338,8 +351,8 @@ fn draw_url_dialogue(frame: &mut Frame, app: &App) {
         );
     frame.render_widget(input, chunks[2]);
 
-    let help = Paragraph::new("Press Enter to submit, Esc to cancel")
-        .style(Style::default().fg(FG_MUTED));
+    let help =
+        Paragraph::new("Press Enter to submit, Esc to cancel").style(Style::default().fg(FG_MUTED));
     frame.render_widget(help, chunks[4]);
 }
 
