@@ -1,10 +1,18 @@
 //! Configuration loading and management for summa.
 //!
 //! Loads settings from `summa.toml` with environment variable overrides for sensitive data.
+//! If no config file exists, creates a default one in `~/.config/summa/summa.toml`.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
+
+/// Default persona for the LLM agent
+const DEFAULT_PERSONA: &str =
+    "You are a senior research assistant specializing in technical synthesis.";
+
+/// Default prompt for summarisation
+const DEFAULT_PROMPT: &str = "Can you provide a comprehensive summary of the given text? The summary should cover all the key points and main ideas presented in the original text, while also condensing the information into a concise and easy-to-understand format. Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition. The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.";
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -12,6 +20,8 @@ pub enum ConfigError {
     ReadError(#[from] std::io::Error),
     #[error("failed to parse config: {0}")]
     ParseError(#[from] toml::de::Error),
+    #[error("failed to serialize config: {0}")]
+    SerializeError(#[from] toml::ser::Error),
     #[error("missing required API key for provider: {0}")]
     MissingApiKey(String),
 }
@@ -20,13 +30,44 @@ pub enum ConfigError {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
     /// LLM provider: "gemini" or "openai"
+    #[serde(default = "default_provider")]
     pub provider: String,
     /// Model identifier (e.g., "gemini-2.0-flash")
+    #[serde(default = "default_model")]
     pub model: String,
     /// System persona for the agent
+    #[serde(default = "default_persona")]
     pub persona: String,
-    /// Prompt
+    /// Prompt template for summarisation
+    #[serde(default = "default_prompt")]
     pub prompt: String,
+}
+
+fn default_provider() -> String {
+    "gemini".to_string()
+}
+
+fn default_model() -> String {
+    "gemini-2.0-flash".to_string()
+}
+
+fn default_persona() -> String {
+    DEFAULT_PERSONA.to_string()
+}
+
+fn default_prompt() -> String {
+    DEFAULT_PROMPT.to_string()
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_provider(),
+            model: default_model(),
+            persona: default_persona(),
+            prompt: default_prompt(),
+        }
+    }
 }
 
 /// API keys configuration (loaded from environment)
@@ -45,17 +86,49 @@ pub struct StorageConfig {
     pub path: PathBuf,
 }
 
+impl Default for StorageConfig {
+    fn default() -> Self {
+        let default_path = dirs::data_dir()
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(".summa")
+            })
+            .join("summa_data");
+
+        Self { path: default_path }
+    }
+}
+
 /// Root configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
+    #[serde(default)]
     pub agent: AgentConfig,
     #[serde(default)]
     pub api: ApiConfig,
+    #[serde(default)]
     pub storage: StorageConfig,
 }
 
 impl Config {
-    /// Load configuration from the default location (summa.toml in cwd or home)
+    /// Get the default config directory path
+    pub fn config_dir() -> PathBuf {
+        dirs::config_dir()
+            .unwrap_or_else(|| {
+                dirs::home_dir()
+                    .unwrap_or_else(|| PathBuf::from("."))
+                    .join(".config")
+            })
+            .join("summa")
+    }
+
+    /// Get the default config file path
+    pub fn config_file_path() -> PathBuf {
+        Self::config_dir().join("summa.toml")
+    }
+
+    /// Load configuration from the default location, creating it if it doesn't exist
     pub fn load() -> Result<Self, ConfigError> {
         let config_path = Self::find_config_file()?;
         Self::load_from(&config_path)
@@ -77,7 +150,7 @@ impl Config {
         Ok(config)
     }
 
-    /// Find the config file in standard locations
+    /// Find the config file, creating a default one if it doesn't exist
     fn find_config_file() -> Result<PathBuf, ConfigError> {
         // Check current directory first
         let local_config = PathBuf::from("summa.toml");
@@ -85,16 +158,31 @@ impl Config {
             return Ok(local_config);
         }
 
-        // Check home directory
-        if let Some(home) = dirs::home_dir() {
-            let home_config = home.join(".config").join("summa").join("summa.toml");
-            if home_config.exists() {
-                return Ok(home_config);
-            }
+        // Check default config directory
+        let default_config = Self::config_file_path();
+        if default_config.exists() {
+            return Ok(default_config);
         }
 
-        // Default to local path (will error on read)
-        Ok(local_config)
+        // Create default config file
+        Self::create_default_config()?;
+        Ok(default_config)
+    }
+
+    /// Create the default config file with sensible defaults
+    fn create_default_config() -> Result<(), ConfigError> {
+        let config_dir = Self::config_dir();
+        std::fs::create_dir_all(&config_dir)?;
+
+        let default_config = Config::default();
+        let config_content = toml::to_string_pretty(&default_config)?;
+
+        let config_path = Self::config_file_path();
+        std::fs::write(&config_path, config_content)?;
+
+        eprintln!("Created default config at: {}", config_path.display());
+
+        Ok(())
     }
 
     /// Get the API key for the configured provider
@@ -115,10 +203,3 @@ impl Config {
     }
 }
 
-impl Default for StorageConfig {
-    fn default() -> Self {
-        Self {
-            path: PathBuf::from("./data"),
-        }
-    }
-}
