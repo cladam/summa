@@ -30,6 +30,7 @@ impl SearchIndex {
         let mut schema_builder = Schema::builder();
         schema_builder.add_text_field("url", TEXT | STORED);
         schema_builder.add_text_field("title", TEXT | STORED);
+        schema_builder.add_text_field("conclusion", TEXT);
         schema_builder.add_text_field("key_points", TEXT);
         schema_builder.add_text_field("entities", TEXT);
         schema_builder.add_text_field("action_items", TEXT);
@@ -50,13 +51,19 @@ impl SearchIndex {
 
         let url_field = self.schema.get_field("url").unwrap();
         let title_field = self.schema.get_field("title").unwrap();
+        let conclusion_field = self.schema.get_field("conclusion").unwrap();
         let key_points_field = self.schema.get_field("key_points").unwrap();
         let entities_field = self.schema.get_field("entities").unwrap();
         let action_items_field = self.schema.get_field("action_items").unwrap();
 
+        // Delete any existing document with this URL first
+        let url_term = tantivy::Term::from_field_text(url_field, url);
+        index_writer.delete_term(url_term);
+
         index_writer.add_document(doc!(
             url_field => url,
             title_field => summary.title.clone(),
+            conclusion_field => summary.conclusion.clone(),
             key_points_field => summary.key_points.join(" "),
             entities_field => summary.entities.join(" "),
             action_items_field => summary.action_items.join(" "),
@@ -76,12 +83,18 @@ impl SearchIndex {
 
         let searcher = reader.searcher();
         let title_field = self.schema.get_field("title").unwrap();
+        let conclusion_field = self.schema.get_field("conclusion").unwrap();
         let key_points_field = self.schema.get_field("key_points").unwrap();
         let entities_field = self.schema.get_field("entities").unwrap();
 
         let query_parser = QueryParser::for_index(
             &self.index,
-            vec![title_field, key_points_field, entities_field],
+            vec![
+                title_field,
+                conclusion_field,
+                key_points_field,
+                entities_field,
+            ],
         );
         let query = query_parser.parse_query(query_str)?;
 

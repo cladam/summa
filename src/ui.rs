@@ -171,6 +171,8 @@ impl App {
 
     /// Perform a search on stored summaries
     fn perform_search(&mut self) {
+        use crate::SearchIndex;
+
         let query = self.search_input.clone();
         if query.is_empty() {
             // Empty search clears results and shows all
@@ -180,50 +182,73 @@ impl App {
             return;
         }
 
-        let query_lower = query.to_lowercase();
-
         if let Ok(config) = Config::load() {
             if let Ok(storage) = Storage::open(&config.storage.path) {
-                if let Ok(all_summaries) = storage.list_all() {
-                    // Filter summaries that match the query
-                    let results: Vec<StoredSummary> = all_summaries
-                        .into_iter()
-                        .filter(|stored| {
-                            let summary = &stored.summary;
-                            summary.title.to_lowercase().contains(&query_lower)
-                                || summary.conclusion.to_lowercase().contains(&query_lower)
-                                || summary
+                // Try tantivy first
+                let search_path = config.storage.path.join("search_index");
+                let matching_urls: Vec<String> =
+                    if let Ok(search_index) = SearchIndex::open(&search_path) {
+                        search_index.search(&query, 50).unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    };
+
+                // If tantivy returned results, filter stored summaries by those URLs
+                // Otherwise fall back to simple text search
+                let results: Vec<StoredSummary> = if !matching_urls.is_empty() {
+                    if let Ok(all_summaries) = storage.list_all() {
+                        all_summaries
+                            .into_iter()
+                            .filter(|s| matching_urls.contains(&s.url))
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
+                } else {
+                    // Fallback to simple text search
+                    let query_lower = query.to_lowercase();
+                    if let Ok(all_summaries) = storage.list_all() {
+                        all_summaries
+                            .into_iter()
+                            .filter(|stored| {
+                                let summary = &stored.summary;
+                                summary.title.to_lowercase().contains(&query_lower)
+                                    || summary.conclusion.to_lowercase().contains(&query_lower)
+                                    || summary
                                     .key_points
                                     .iter()
                                     .any(|p| p.to_lowercase().contains(&query_lower))
-                                || summary
+                                    || summary
                                     .entities
                                     .iter()
                                     .any(|e| e.to_lowercase().contains(&query_lower))
-                                || stored.url.to_lowercase().contains(&query_lower)
-                        })
-                        .collect();
-
-                    self.stored_summaries = results;
-                    self.is_search_results = true;
-                    self.current_search_query = query.clone();
-
-                    // Update status
-                    self.status = format!(
-                        "Found {} result(s) for '{}'. Esc to clear search.",
-                        self.stored_summaries.len(),
-                        query
-                    );
-
-                    // Select first result if any
-                    if !self.stored_summaries.is_empty() {
-                        self.list_state.select(Some(0));
-                        self.update_selected_summary();
+                                    || stored.url.to_lowercase().contains(&query_lower)
+                            })
+                            .collect()
                     } else {
-                        self.list_state.select(None);
-                        self.summary = None;
-                        self.source_url = None;
+                        Vec::new()
                     }
+                };
+
+                self.stored_summaries = results;
+                self.is_search_results = true;
+                self.current_search_query = query.clone();
+
+                // Update status
+                self.status = format!(
+                    "Found {} result(s) for '{}'. Esc to clear search.",
+                    self.stored_summaries.len(),
+                    query
+                );
+
+                // Select first result if any
+                if !self.stored_summaries.is_empty() {
+                    self.list_state.select(Some(0));
+                    self.update_selected_summary();
+                } else {
+                    self.list_state.select(None);
+                    self.summary = None;
+                    self.source_url = None;
                 }
             }
         }
@@ -234,8 +259,7 @@ impl App {
         self.is_search_results = false;
         self.current_search_query.clear();
         self.search_input.clear();
-        self.status =
-            "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
+        self.status = "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
         self.load_summaries();
     }
 
@@ -368,9 +392,7 @@ impl App {
                             self.summary = Some(summary);
                             self.source_url = Some(url);
                             self.state = AppState::Main;
-                            self.status =
-                                "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit"
-                                    .to_string();
+                            self.status = "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
 
                             // Reload summaries list to include the new one
                             self.load_summaries();
@@ -390,10 +412,22 @@ impl App {
         }
     }
 
-    /// Save a summary to persistent storage
+    /// Save a summary to persistent storage and search index
     fn save_summary(&self, url: &str, summary: &Summary, config: &Config) -> anyhow::Result<()> {
+        use crate::SearchIndex;
+
+        // Store in sled
         let storage = Storage::open(&config.storage.path)?;
         storage.store(url, summary)?;
+
+        // Index in tantivy for full-text search
+        let search_path = config.storage.path.join("search_index");
+        if let Ok(search_index) = SearchIndex::open(&search_path) {
+            if let Err(e) = search_index.index_summary(url, summary) {
+                eprintln!("Warning: Failed to index summary: {}", e);
+            }
+        }
+
         Ok(())
     }
 }
@@ -453,11 +487,7 @@ fn draw_summary_list(frame: &mut Frame, app: &mut App, area: Rect) {
     };
 
     let title = if app.is_search_results {
-        format!(
-            " Results: '{}' ({}) ",
-            app.current_search_query,
-            app.stored_summaries.len()
-        )
+        format!(" Results: '{}' ({}) ", app.current_search_query, app.stored_summaries.len())
     } else {
         format!(" Summaries ({}) ", app.stored_summaries.len())
     };
@@ -736,9 +766,8 @@ fn draw_search_dialogue(frame: &mut Frame, app: &App) {
         );
     frame.render_widget(input, chunks[2]);
 
-    let help =
-        Paragraph::new("Enter to search, Esc to cancel. Searches titles, content & entities.")
-            .style(Style::default().fg(FG_MUTED));
+    let help = Paragraph::new("Enter to search, Esc to cancel. Searches titles, content & entities.")
+        .style(Style::default().fg(FG_MUTED));
     frame.render_widget(help, chunks[4]);
 }
 

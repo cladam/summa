@@ -4,7 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summa::{agent, scraper, ui, Config, Storage};
+use summa::{agent, scraper, ui, Config, SearchIndex, Storage};
 
 #[derive(Parser)]
 #[command(name = "summa")]
@@ -60,9 +60,17 @@ async fn main() -> anyhow::Result<()> {
                 let config = Config::load()?;
                 let summary = agent::summarize(&content.text, &config).await?;
 
-                // Persist the summary
+                // Persist the summary to sled storage
                 let storage = Storage::open(&config.storage.path)?;
                 storage.store(&url, &summary)?;
+
+                // Index in tantivy for full-text search
+                let search_path = config.storage.path.join("search_index");
+                if let Ok(search_index) = SearchIndex::open(&search_path) {
+                    if let Err(e) = search_index.index_summary(&url, &summary) {
+                        eprintln!("Warning: Failed to index summary: {}", e);
+                    }
+                }
 
                 println!("=== {} ===\n", summary.title);
 
@@ -91,8 +99,16 @@ async fn main() -> anyhow::Result<()> {
             let config = Config::load()?;
             let storage = Storage::open(&config.storage.path)?;
 
-            // Use simple text search (tantivy index is not populated during storage)
-            let results = simple_search(&storage, &query)?;
+            // Try tantivy first, fall back to simple search
+            let search_path = config.storage.path.join("search_index");
+            let results = if let Ok(search_index) = SearchIndex::open(&search_path) {
+                match search_index.search(&query, 20) {
+                    Ok(urls) if !urls.is_empty() => urls,
+                    _ => simple_search(&storage, &query)?,
+                }
+            } else {
+                simple_search(&storage, &query)?
+            };
 
             if results.is_empty() {
                 println!("No results found for: {}", query);
