@@ -18,6 +18,14 @@ use ratatui::{
 };
 use std::io;
 
+// Colour scheme (myon/ilseon inspired)
+const BG_DEEP: Color = Color::Rgb(54, 52, 58);
+const FG_PRIMARY: Color = Color::Rgb(224, 224, 224);
+const FG_MUTED: Color = Color::Rgb(176, 176, 176);
+const BORDER_ACTIVE: Color = Color::Rgb(90, 155, 128);
+const BORDER_QUIET: Color = Color::Rgb(31, 31, 31);
+const ACCENT_URGENT: Color = Color::Rgb(179, 95, 95);
+
 /// Application state
 #[derive(Debug, Clone, PartialEq)]
 enum AppState {
@@ -154,8 +162,8 @@ fn draw(frame: &mut Frame, app: &App) {
     draw_main_content(frame, app, chunks[0]);
 
     // Status bar
-    let status = Paragraph::new(app.status.clone())
-        .style(Style::default().fg(Color::White).bg(Color::DarkGray));
+    let status =
+        Paragraph::new(app.status.clone()).style(Style::default().fg(FG_MUTED).bg(BORDER_QUIET));
     frame.render_widget(status, chunks[1]);
 
     // Draw URL input dialogue if active
@@ -179,7 +187,7 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(" Summa - Webpage Summariser ")
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Cyan));
+        .style(Style::default().fg(BORDER_ACTIVE).bg(BG_DEEP));
 
     if let Some(ref summary) = app.summary {
         // Display summary
@@ -188,17 +196,15 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
         // Title
         lines.push(Line::from(vec![Span::styled(
             &summary.title,
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(FG_PRIMARY).add_modifier(Modifier::BOLD),
         )]));
         lines.push(Line::from(""));
 
         // Source URL
         if let Some(ref url) = app.source_url {
             lines.push(Line::from(vec![
-                Span::styled("Source: ", Style::default().fg(Color::DarkGray)),
-                Span::styled(url, Style::default().fg(Color::Blue)),
+                Span::styled("Source: ", Style::default().fg(FG_MUTED)),
+                Span::styled(url, Style::default().fg(BORDER_ACTIVE)),
             ]));
             lines.push(Line::from(""));
         }
@@ -207,21 +213,27 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(vec![Span::styled(
             "💡 Conclusion",
             Style::default()
-                .fg(Color::Green)
+                .fg(BORDER_ACTIVE)
                 .add_modifier(Modifier::BOLD),
         )]));
-        lines.push(Line::from(format!("   {}", summary.conclusion)));
+        lines.push(Line::from(Span::styled(
+            format!("   {}", summary.conclusion),
+            Style::default().fg(FG_PRIMARY),
+        )));
         lines.push(Line::from(""));
 
         // Key Points
         lines.push(Line::from(vec![Span::styled(
             "📌 Key Points",
             Style::default()
-                .fg(Color::Magenta)
+                .fg(BORDER_ACTIVE)
                 .add_modifier(Modifier::BOLD),
         )]));
         for point in &summary.key_points {
-            lines.push(Line::from(format!("   • {}", point)));
+            lines.push(Line::from(Span::styled(
+                format!("   • {}", point),
+                Style::default().fg(FG_PRIMARY),
+            )));
         }
         lines.push(Line::from(""));
 
@@ -230,10 +242,13 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::from(vec![Span::styled(
                 "🏷️  Entities",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(BORDER_ACTIVE)
                     .add_modifier(Modifier::BOLD),
             )]));
-            lines.push(Line::from(format!("   {}", summary.entities.join(", "))));
+            lines.push(Line::from(Span::styled(
+                format!("   {}", summary.entities.join(", ")),
+                Style::default().fg(FG_MUTED),
+            )));
             lines.push(Line::from(""));
         }
 
@@ -242,11 +257,14 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::from(vec![Span::styled(
                 "✅ Action Items",
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(BORDER_ACTIVE)
                     .add_modifier(Modifier::BOLD),
             )]));
             for item in &summary.action_items {
-                lines.push(Line::from(format!("   • {}", item)));
+                lines.push(Line::from(Span::styled(
+                    format!("   • {}", item),
+                    Style::default().fg(FG_PRIMARY),
+                )));
             }
         }
 
@@ -260,20 +278,21 @@ fn draw_main_content(frame: &mut Frame, app: &App, area: Rect) {
             Line::from(""),
             Line::from(vec![Span::styled(
                 "Welcome to Summa!",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
+                Style::default().fg(FG_PRIMARY).add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),
-            Line::from("Intelligent webpage summarisation powered by LLMs."),
+            Line::from(Span::styled(
+                "Intelligent webpage summarisation powered by LLMs.",
+                Style::default().fg(FG_MUTED),
+            )),
             Line::from(""),
             Line::from(vec![
-                Span::styled("  o  ", Style::default().fg(Color::Yellow)),
-                Span::raw("Open a URL to summarise"),
+                Span::styled("  o  ", Style::default().fg(BORDER_ACTIVE)),
+                Span::styled("Open a URL to summarise", Style::default().fg(FG_PRIMARY)),
             ]),
             Line::from(vec![
-                Span::styled("  q  ", Style::default().fg(Color::Yellow)),
-                Span::raw("Quit"),
+                Span::styled("  q  ", Style::default().fg(BORDER_ACTIVE)),
+                Span::styled("Quit", Style::default().fg(FG_PRIMARY)),
             ]),
         ];
         let paragraph = Paragraph::new(welcome).block(block);
@@ -291,7 +310,7 @@ fn draw_url_dialogue(frame: &mut Frame, app: &App) {
     let block = Block::default()
         .title(" Enter URL ")
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Yellow));
+        .style(Style::default().fg(BORDER_ACTIVE).bg(BG_DEEP));
 
     let inner = block.inner(area);
     frame.render_widget(block, area);
@@ -302,15 +321,15 @@ fn draw_url_dialogue(frame: &mut Frame, app: &App) {
         .margin(1)
         .split(inner);
 
-    let label = Paragraph::new("URL:");
+    let label = Paragraph::new("URL:").style(Style::default().fg(FG_MUTED));
     frame.render_widget(label, chunks[0]);
 
     let input = Paragraph::new(app.url_input.as_str())
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(FG_PRIMARY))
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(BORDER_ACTIVE)),
         );
     frame.render_widget(input, chunks[1]);
 }
@@ -323,11 +342,11 @@ fn draw_loading(frame: &mut Frame) {
     let block = Block::default()
         .title(" Loading ")
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Yellow));
+        .style(Style::default().fg(BORDER_ACTIVE).bg(BG_DEEP));
 
     let text = Paragraph::new("Please wait...")
         .block(block)
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(FG_MUTED));
     frame.render_widget(text, area);
 }
 
@@ -339,12 +358,12 @@ fn draw_error(frame: &mut Frame, message: &str) {
     let block = Block::default()
         .title(" Error ")
         .borders(Borders::ALL)
-        .style(Style::default().fg(Color::Red));
+        .style(Style::default().fg(ACCENT_URGENT).bg(BG_DEEP));
 
     let text = Paragraph::new(message)
         .block(block)
         .wrap(Wrap { trim: false })
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(FG_PRIMARY));
     frame.render_widget(text, area);
 }
 
