@@ -202,8 +202,21 @@ tbdflow status
 
 **Use This When**
 
-* The user says “sync”, “catch me up”, or “what’s happening”
-* Before merging or starting new work
+* The user says "sync", "catch me up", or "what's happening"
+* Before committing, merging, or starting new work
+
+---
+
+### Pre-Commit Workflow
+
+**Always run `tbdflow sync` before `tbdflow commit`.**
+
+The `sync` command:
+* Pulls and rebases from remote
+* Shows current status (wraps `git status`)
+* Ensures the workspace is aligned with trunk
+
+This prevents conflicts and ensures commits are based on the latest trunk state.
 
 ---
 
