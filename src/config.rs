@@ -12,7 +12,8 @@ const DEFAULT_PERSONA: &str =
     "You are a senior research assistant specializing in technical synthesis.";
 
 /// Default prompt for summarisation
-const DEFAULT_PROMPT: &str = "Can you provide a comprehensive summary of the given text? The summary should cover all the key points and main ideas presented in the original text, while also condensing the information into a concise and easy-to-understand format. Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition. The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information.";
+const DEFAULT_PROMPT: &str = "Can you provide a comprehensive summary of the given text? The summary should cover all the key points and main ideas presented in the original text, while also condensing the information into a concise and easy-to-understand format. Please ensure that the summary includes relevant details and examples that support the main ideas, while avoiding any unnecessary information or repetition. The length of the summary should be appropriate for the length and complexity of the original text, providing a clear and accurate overview without omitting any important information. Use British English spelling and conventions throughout your response.";
+//const DEFAULT_PROMPT: &str = "Analyse the following text and extract a structured summary. Focus on the main conclusion, key points, named entities (people, organisations, technologies), and any actionable items. Be concise but comprehensive. Use British English spelling and conventions throughout your response.";
 
 #[derive(Error, Debug)]
 pub enum ConfigError {
@@ -202,4 +203,3 @@ impl Config {
         }
     }
 }
-

@@ -30,9 +30,26 @@ pub async fn summarize(text: &str, config: &Config) -> Result<Summary, AgentErro
         .map_err(|e| AgentError::RequestFailed(e.to_string()))?
         .model(model);
 
-    // Build the prompt including persona as context
+    // Build the prompt including persona, schema, and text
     let prompt = format!(
-        "{}\n\n{}\n\n---\n\n{}",
+        r#"{}
+
+{}
+
+You MUST respond with valid JSON matching this exact schema:
+{{
+  "title": "string - a concise title for the content",
+  "conclusion": "string - the main takeaway or conclusion of the article in 1-2 sentences",
+  "key_points": ["array of key takeaways"],
+  "entities": ["array of named entities like people, organizations, technologies"],
+  "action_items": ["array of actionable items or next steps, can be empty"]
+}}
+
+Do not include any markdown formatting, code blocks, or explanations. Only output the raw JSON object.
+
+---
+
+{}"#,
         config.agent.persona, config.agent.prompt, text
     );
 
@@ -42,11 +59,39 @@ pub async fn summarize(text: &str, config: &Config) -> Result<Summary, AgentErro
         .await
         .map_err(|e| AgentError::RequestFailed(e.to_string()))?;
 
+    // Debug: print raw response
+    // eprintln!("--- Raw LLM Response ---");
+    // eprintln!("{}", result.text);
+    // eprintln!("--- End Response ---");
+
+    // Clean the response (strip markdown code blocks if present)
+    let cleaned = strip_markdown_json(&result.text);
+
     // Parse the JSON response into Summary
-    let summary: Summary = serde_json::from_str(&result.text)
-        .map_err(|e| AgentError::ParseError(e.to_string()))?;
+    let summary: Summary = serde_json::from_str(&cleaned)
+        .map_err(|e| AgentError::ParseError(format!("{}: {}", e, cleaned)))?;
 
     Ok(summary)
+}
+
+/// Strip markdown code block wrappers from JSON response
+fn strip_markdown_json(text: &str) -> String {
+    let trimmed = text.trim();
+
+    // Remove ```json ... ``` or ``` ... ```
+    if trimmed.starts_with("```") {
+        let without_prefix = if trimmed.starts_with("```json") {
+            &trimmed[7..]
+        } else {
+            &trimmed[3..]
+        };
+
+        if let Some(end_idx) = without_prefix.rfind("```") {
+            return without_prefix[..end_idx].trim().to_string();
+        }
+    }
+
+    trimmed.to_string()
 }
 
 /// Parse a model string into a GeminiModel

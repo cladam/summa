@@ -45,7 +45,10 @@ async fn main() -> anyhow::Result<()> {
 
             // Scrape the content
             let content = scraper::fetch_content(&url).await?;
-            let title = content.title.clone().unwrap_or_else(|| "No title".to_string());
+            let title = content
+                .title
+                .clone()
+                .unwrap_or_else(|| "No title".to_string());
 
             if raw {
                 // Just show raw extracted text
@@ -60,6 +63,9 @@ async fn main() -> anyhow::Result<()> {
                 let summary = agent::summarize(&content.text, &config).await?;
 
                 println!("=== {} ===\n", summary.title);
+
+                println!("💡 Conclusion:");
+                println!("  {}\n", summary.conclusion);
 
                 println!("📌 Key Points:");
                 for point in &summary.key_points {

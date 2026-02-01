@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 pub struct Summary {
     /// Title or headline for the summarized content
     pub title: String,
+    /// Main conclusion or takeaway from the content
+    pub conclusion: String,
     /// Main takeaways from the content
     pub key_points: Vec<String>,
     /// Named entities mentioned (people, organizations, technologies, etc.)
@@ -22,12 +24,14 @@ impl Summary {
     /// Create a new summary
     pub fn new(
         title: String,
+        conclusion: String,
         key_points: Vec<String>,
         entities: Vec<String>,
         action_items: Vec<String>,
     ) -> Self {
         Self {
             title,
+            conclusion,
             key_points,
             entities,
             action_items,
@@ -36,6 +40,9 @@ impl Summary {
 
     /// Check if the summary has any content
     pub fn is_empty(&self) -> bool {
-        self.key_points.is_empty() && self.entities.is_empty() && self.action_items.is_empty()
+        self.conclusion.is_empty()
+            && self.key_points.is_empty()
+            && self.entities.is_empty()
+            && self.action_items.is_empty()
     }
 }
