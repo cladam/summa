@@ -657,7 +657,7 @@ fn draw_detail_view(frame: &mut Frame, app: &mut App, area: Rect) {
         let welcome = vec![
             Line::from(""),
             Line::from(vec![Span::styled(
-                "Welcome to Summa!",
+                "Welcome to Summera!",
                 Style::default().fg(FG_PRIMARY).add_modifier(Modifier::BOLD),
             )]),
             Line::from(""),

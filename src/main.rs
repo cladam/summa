@@ -1,13 +1,13 @@
-//! Summa CLI - Intelligent webpage summarisation
+//! summera CLI - Intelligent webpage summarisation
 //!
 //! The application logic is contained in lib.rs, and this file is responsible
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summa::{agent, scraper, ui, Config, SearchIndex, Storage};
+use summera::{agent, scraper, ui, Config, SearchIndex, Storage};
 
 #[derive(Parser)]
-#[command(name = "summa")]
+#[command(name = "summera")]
 #[command(author, version, about = "TUI for intelligent webpage summarisation", long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -18,7 +18,7 @@ struct Cli {
 enum Commands {
     /// Summarise a webpage by URL
     Summarise {
-        /// URL to summarize
+        /// URL to summarise
         url: String,
         /// Show raw extracted text instead of summary
         #[arg(long)]
@@ -31,6 +31,9 @@ enum Commands {
     },
     /// List all stored summaries
     List,
+    /// Update summera to the latest version.
+    #[command(name = "update", hide = true)] // Hidden from help
+    Update,
 }
 
 #[tokio::main]
@@ -146,6 +149,18 @@ async fn main() -> anyhow::Result<()> {
                     println!("   {}\n", stored.summary.conclusion);
                 }
             }
+        }
+        Some(Commands::Update) => {
+            println!("--- Checking for updates ---");
+            let status = self_update::backends::github::Update::configure()
+                .repo_owner("cladam")
+                .repo_name("summa")
+                .bin_name("summera")
+                .show_download_progress(true)
+                .current_version(self_update::cargo_crate_version!())
+                .build()?
+                .update()?;
+            println!("Update status: `{}`!", status.version());
         }
         None => {
             // Default: Launch the TUI

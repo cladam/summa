@@ -1,4 +1,4 @@
-# summa
+# summera
 
 Intelligent webpage summarisation powered by LLMs with a beautiful TUI.
 
@@ -23,10 +23,10 @@ cargo install --path .
 
 ### TUI Mode (default)
 
-Simply run `summa` to launch the interactive TUI:
+Simply run `summera` to launch the interactive TUI:
 
 ```bash
-summa
+summera
 ```
 
 **Key bindings:**
@@ -44,37 +44,37 @@ summa
 #### Summarise a webpage
 
 ```bash
-summa summarise <URL>
+summera summarise <URL>
 ```
 
 Example:
 
 ```bash
-summa summarise https://cladam.github.io/2025/12/22/lewin-and-devops/
+summera summarise https://cladam.github.io/2025/12/22/lewin-and-devops/
 ```
 
 #### View raw extracted text
 
 ```bash
-summa summarise <URL> --raw
+summera summarise <URL> --raw
 ```
 
 #### Search stored summaries
 
 ```bash
-summa search <QUERY>
+summera search <QUERY>
 ```
 
 Example:
 
 ```bash
-summa search "DevOps"
+summera search "DevOps"
 ```
 
 #### List all stored summaries
 
 ```bash
-summa list
+summera list
 ```
 
 ## Configuration
@@ -88,12 +88,12 @@ operating system:
 
 Summa looks for configuration in the following locations (in order):
 
-1. `./summa.toml` (current directory)
-2. `summa.toml` in default config directory
+1. `./summera.toml` (current directory)
+2. `summera.toml` in default config directory
 
 If no config file exists, a default one is created automatically.
 
-### Example `summa.toml`
+### Example `summera.toml`
 
 ```toml
 [agent]
@@ -111,7 +111,7 @@ gemini_key = "AIza..."
 
 ### API Keys
 
-Use the section in `summa.toml` or set your API key as an environment variable:
+Use the section in `summera.toml` or set your API key as an environment variable:
 
 ```bash
 # For Gemini
@@ -128,7 +128,7 @@ Summa stores data in two locations within the configured storage path:
 - **sled database**: Stores full summary data with timestamps
 - **tantivy index**: Full-text search index for fast querying
 
-Default location: `~/.local/share/summa_data/`
+Default location: `~/.local/share/summera_data/`
 
 ## Architecture
 

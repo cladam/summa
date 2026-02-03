@@ -1,7 +1,7 @@
 //! Configuration loading and management for summa.
 //!
-//! Loads settings from `summa.toml` with environment variable overrides for sensitive data.
-//! If no config file exists, creates a default one in `~/.config/summa/summa.toml`.
+//! Loads settings from `summera.toml` with environment variable overrides for sensitive data.
+//! If no config file exists, creates a default one in `~/.config/summera/summera.toml`.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -93,9 +93,9 @@ impl Default for StorageConfig {
             .unwrap_or_else(|| {
                 dirs::home_dir()
                     .unwrap_or_else(|| PathBuf::from("."))
-                    .join(".summa")
+                    .join(".summera")
             })
-            .join("summa_data");
+            .join("summera_data");
 
         Self { path: default_path }
     }
@@ -121,12 +121,12 @@ impl Config {
                     .unwrap_or_else(|| PathBuf::from("."))
                     .join(".config")
             })
-            .join("summa")
+            .join("summera")
     }
 
     /// Get the default config file path
     pub fn config_file_path() -> PathBuf {
-        Self::config_dir().join("summa.toml")
+        Self::config_dir().join("summera.toml")
     }
 
     /// Load configuration from the default location, creating it if it doesn't exist
@@ -154,7 +154,7 @@ impl Config {
     /// Find the config file, creating a default one if it doesn't exist
     fn find_config_file() -> Result<PathBuf, ConfigError> {
         // Check current directory first
-        let local_config = PathBuf::from("summa.toml");
+        let local_config = PathBuf::from("summera.toml");
         if local_config.exists() {
             return Ok(local_config);
         }
