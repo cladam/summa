@@ -6,8 +6,8 @@ repository = "https://github.com/cladam/summa"
 readme = "README.md"
 license = "MIT"
 description = "TUI for webpage summarisation"
-keywords = ["tui", "documentation"]
-categories = ["command-line-utilities", "development-tools"]
+keywords = ["tui", "documentation", "summary", "LLMs"]
+categories = ["command-line-utilities", "text-processing"]
 edition = "2021"
 
 [dependencies]
