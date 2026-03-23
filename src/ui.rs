@@ -2,7 +2,7 @@
 //!
 //! Component-based pattern for high responsiveness.
 
-use crate::{agent, scraper, Config, Storage, StoredSummary, Summary};
+use crate::{agent, reader, scraper, Config, Storage, StoredSummary, Summary};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -87,7 +87,8 @@ impl Default for App {
             summary: None,
             source_url: None,
             should_quit: false,
-            status: "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string(),
+            status: "'o' open URL/file, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit"
+                .to_string(),
             stored_summaries: Vec::new(),
             list_state: ListState::default(),
             focused_pane: FocusedPane::List,
@@ -260,7 +261,7 @@ impl App {
         self.current_search_query.clear();
         self.search_input.clear();
         self.status =
-            "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
+            "'o' open URL/file, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit".to_string();
         self.load_summaries();
     }
 
@@ -370,47 +371,63 @@ impl App {
         }
     }
 
-    /// Fetch and summarise a URL
+    /// Fetch and summarise a URL or local file (PDF/PPTX)
     async fn fetch_and_summarise(&mut self) {
-        let url = self.url_input.clone();
-        self.status = format!("Fetching: {}", url);
+        let input = self.url_input.clone();
 
-        // Fetch content
-        match scraper::fetch_content(&url).await {
-            Ok(content) => {
-                self.status = format!("Summarising {} characters...", content.text.len());
-
-                // Load config and summarise
-                match Config::load() {
-                    Ok(config) => match agent::summarize(&content.text, &config).await {
-                        Ok(summary) => {
-                            // Persist the summary
-                            if let Err(e) = self.save_summary(&url, &summary, &config) {
-                                // Log but don't fail - storage is optional
-                                eprintln!("Warning: Failed to save summary: {}", e);
-                            }
-
-                            self.summary = Some(summary);
-                            self.source_url = Some(url);
-                            self.state = AppState::Main;
-                            self.status =
-                                "'o' open URL, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit"
-                                    .to_string();
-
-                            // Reload summaries list to include the new one
-                            self.load_summaries();
-                        }
-                        Err(e) => {
-                            self.state = AppState::Error(format!("Summarisation failed: {}", e));
-                        }
-                    },
-                    Err(e) => {
-                        self.state = AppState::Error(format!("Config error: {}", e));
-                    }
+        // Extract text from URL or local file
+        let (text, source_key) = if reader::is_url(&input) {
+            self.status = format!("Fetching: {}", input);
+            match scraper::fetch_content(&input).await {
+                Ok(content) => (content.text, input.clone()),
+                Err(e) => {
+                    self.state = AppState::Error(format!("Failed to fetch URL: {}", e));
+                    return;
                 }
             }
+        } else {
+            self.status = format!("Reading: {}", input);
+            match reader::extract_from_file(&input) {
+                Ok(content) => {
+                    let abs_path = std::fs::canonicalize(&input)
+                        .unwrap_or_else(|_| std::path::PathBuf::from(&input));
+                    let key = format!("file://{}", abs_path.display());
+                    (content.text, key)
+                }
+                Err(e) => {
+                    self.state = AppState::Error(format!("Failed to read file: {}", e));
+                    return;
+                }
+            }
+        };
+
+        self.status = format!("Summarising {} characters...", text.len());
+
+        // Load config and summarise
+        match Config::load() {
+            Ok(config) => match agent::summarize(&text, &config).await {
+                Ok(summary) => {
+                    // Persist the summary
+                    if let Err(e) = self.save_summary(&source_key, &summary, &config) {
+                        eprintln!("Warning: Failed to save summary: {}", e);
+                    }
+
+                    self.summary = Some(summary);
+                    self.source_url = Some(source_key);
+                    self.state = AppState::Main;
+                    self.status =
+                        "'o' open URL/file, 'f' search, ↑↓ navigate, Tab switch panes, 'q' quit"
+                            .to_string();
+
+                    // Reload summaries list to include the new one
+                    self.load_summaries();
+                }
+                Err(e) => {
+                    self.state = AppState::Error(format!("Summarisation failed: {}", e));
+                }
+            },
             Err(e) => {
-                self.state = AppState::Error(format!("Failed to fetch URL: {}", e));
+                self.state = AppState::Error(format!("Config error: {}", e));
             }
         }
     }
@@ -505,7 +522,7 @@ fn draw_summary_list(frame: &mut Frame, app: &mut App, area: Rect) {
         .style(Style::default().fg(border_color).bg(BG_DEEP));
 
     if app.stored_summaries.is_empty() {
-        let empty_msg = Paragraph::new("No summaries yet.\nPress 'o' to add one.")
+        let empty_msg = Paragraph::new("No summaries yet.\nPress 'o' to open a URL or file.")
             .block(block)
             .style(Style::default().fg(FG_MUTED));
         frame.render_widget(empty_msg, area);
@@ -700,7 +717,7 @@ fn draw_url_dialogue(frame: &mut Frame, app: &App) {
     frame.render_widget(Clear, area);
 
     let block = Block::default()
-        .title(" Enter URL ")
+        .title(" Enter URL or File Path ")
         .borders(Borders::ALL)
         .style(Style::default().fg(BORDER_ACTIVE).bg(BG_DEEP));
 
@@ -718,7 +735,7 @@ fn draw_url_dialogue(frame: &mut Frame, app: &App) {
         ])
         .split(inner);
 
-    let label = Paragraph::new("URL:").style(Style::default().fg(FG_MUTED));
+    let label = Paragraph::new("URL or path (PDF, PPTX):").style(Style::default().fg(FG_MUTED));
     frame.render_widget(label, chunks[0]);
 
     let input = Paragraph::new(format!(" {}", app.url_input))

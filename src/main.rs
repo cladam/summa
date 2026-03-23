@@ -4,7 +4,7 @@
 //! for parsing arguments and handling top-level errors.
 
 use clap::{Parser, Subcommand};
-use summera::{agent, scraper, ui, Config, SearchIndex, Storage};
+use summera::{agent, reader, scraper, ui, Config, SearchIndex, Storage};
 
 #[derive(Parser)]
 #[command(name = "summera")]
@@ -16,10 +16,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Summarise a webpage by URL
+    /// Summarise a webpage by URL or a local file (PDF, PPTX)
     Summarise {
-        /// URL to summarise
-        url: String,
+        /// URL or local file path to summarise
+        source: String,
         /// Show raw extracted text instead of summary
         #[arg(long)]
         raw: bool,
@@ -41,36 +41,48 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Some(Commands::Summarise { url, raw }) => {
-            println!("Fetching: {}", url);
-
-            // Scrape the content
-            let content = scraper::fetch_content(&url).await?;
-            let title = content
-                .title
-                .clone()
-                .unwrap_or_else(|| "No title".to_string());
+        Some(Commands::Summarise { source, raw }) => {
+            // Detect whether the source is a URL or a local file
+            let (title, text, source_key) = if reader::is_url(&source) {
+                println!("Fetching: {}", source);
+                let content = scraper::fetch_content(&source).await?;
+                let title = content
+                    .title
+                    .unwrap_or_else(|| "No title".to_string());
+                (title, content.text, source.clone())
+            } else {
+                println!("Reading: {}", source);
+                let content = reader::extract_from_file(&source)?;
+                let title = content
+                    .title
+                    .unwrap_or_else(|| "No title".to_string());
+                // Use absolute path as the storage key for local files
+                let abs_path = std::fs::canonicalize(&source)
+                    .unwrap_or_else(|_| std::path::PathBuf::from(&source));
+                let key = format!("file://{}", abs_path.display());
+                (title, content.text, key)
+            };
 
             if raw {
                 // Just show raw extracted text
                 println!("\n=== {} ===\n", title);
-                println!("{}", content.text);
-                println!("\n--- Extracted {} characters ---", content.text.len());
+                println!("{}", text);
+                println!("\n--- Extracted {} characters ---", text.len());
             } else {
                 // Summarise using LLM
-                println!("Summarising {} characters...\n", content.text.len());
+                println!("Summarising {} characters...\n", text.len());
 
                 let config = Config::load()?;
-                let summary = agent::summarize(&content.text, &config).await?;
+                let summary = agent::summarize(&text, &config).await?;
 
                 // Persist the summary to sled storage
                 let storage = Storage::open(&config.storage.path)?;
-                storage.store(&url, &summary)?;
+                storage.store(&source_key, &summary)?;
 
                 // Index in tantivy for full-text search
                 let search_path = config.storage.path.join("search_index");
                 if let Ok(search_index) = SearchIndex::open(&search_path) {
-                    if let Err(e) = search_index.index_summary(&url, &summary) {
+                    if let Err(e) = search_index.index_summary(&source_key, &summary) {
                         eprintln!("Warning: Failed to index summary: {}", e);
                     }
                 }

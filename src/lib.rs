@@ -7,10 +7,12 @@
 //! - **Structured Intelligence**: Returns typed `Summary` structs with key points, entities, and actions
 //! - **Hybrid Storage**: sled for raw storage, tantivy for full-text search
 //! - **Provider Agnostic**: Supports Gemini and OpenAI via rstructor
+//! - **Local Files**: Extract text from PDF and PPTX files for summarisation
 
 pub mod agent;
 pub mod config;
 pub mod db;
+pub mod reader;
 pub mod scraper;
 pub mod search;
 pub mod storage;
