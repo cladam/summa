@@ -2381,6 +2381,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
+name = "openssl-src"
+version = "300.5.5+3.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f1787d533e03597a7934fd0a765f0d28e94ecc5fb7789f8053b1e699a56f709"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.111"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2388,6 +2397,7 @@ checksum = "82cab2d520aa75e3c58898289429321eb788c3106963d0dc886ec7a5f4adc321"
 dependencies = [
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
@@ -3190,11 +3200,12 @@ dependencies = [
 
 [[package]]
 name = "rstructor"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e63cdc41bf0cf96282d695f2aeb4809bb4322b14e331abebc20a05cc7c80ab72"
+checksum = "3845eeefb6c555c19e4417e612a7b6f734acaf985f4a37e2c6cb606f2b95c507"
 dependencies = [
  "async-trait",
+ "base64",
  "chrono",
  "reqwest 0.13.1",
  "rstructor_derive",
@@ -3209,9 +3220,9 @@ dependencies = [
 
 [[package]]
 name = "rstructor_derive"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a76c3f17f8550387a22e1032e0472600fe737b49e61c6a92dfb7b604044805c1"
+checksum = "b676116e04129c6e0a904c10e0e5ba6b06c5707b44e3766a20c99a57dab2f9cc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3428,9 +3439,9 @@ dependencies = [
 
 [[package]]
 name = "schemars"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54e910108742c57a770f492731f99be216a52fadd361b06c8fb59d74ccc267d2"
+checksum = "a2b42f36aa1cd011945615b92222f6bf73c599a102a300334cd7f8dbeec726cc"
 dependencies = [
  "dyn-clone",
  "ref-cast",
@@ -3441,9 +3452,9 @@ dependencies = [
 
 [[package]]
 name = "schemars_derive"
-version = "1.2.0"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4908ad288c5035a8eb12cfdf0d49270def0a268ee162b75eeee0f85d155a7c45"
+checksum = "7d115b50f4aaeea07e79c1912f645c7513d81715d0420f8bc77a18c6260b307f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3889,7 +3900,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "summera"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "atty",
@@ -3902,6 +3913,7 @@ dependencies = [
  "dirs",
  "edit",
  "lazy_static",
+ "openssl-sys",
  "ratatui",
  "reqwest 0.13.1",
  "rstructor",

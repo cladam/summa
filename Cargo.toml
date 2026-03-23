@@ -1,6 +1,6 @@
 [package]
 name = "summera"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Claes Adamsson <claes.adamsson@gmail.com>"]
 repository = "https://github.com/cladam/summera"
 readme = "README.md"
@@ -38,8 +38,10 @@ reqwest = { version = "0.13.1", features = ["json"] }
 scraper = "0.26.0"
 # Async runtime
 tokio = { version = "1", features = ["full"] }
-rstructor = "0.2.7"
-schemars = "1.2.0"
+rstructor = "0.2.9"
+schemars = "1.2.1"
+[target.'cfg(all(target_os = "linux", target_arch = "aarch64"))'.dependencies]
+openssl-sys = { version = "0.9.109", features = ["vendored"] }
 
 [lib]
 name = "summera"
