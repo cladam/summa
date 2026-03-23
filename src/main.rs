@@ -46,16 +46,12 @@ async fn main() -> anyhow::Result<()> {
             let (title, text, source_key) = if reader::is_url(&source) {
                 println!("Fetching: {}", source);
                 let content = scraper::fetch_content(&source).await?;
-                let title = content
-                    .title
-                    .unwrap_or_else(|| "No title".to_string());
+                let title = content.title.unwrap_or_else(|| "No title".to_string());
                 (title, content.text, source.clone())
             } else {
                 println!("Reading: {}", source);
                 let content = reader::extract_from_file(&source)?;
-                let title = content
-                    .title
-                    .unwrap_or_else(|| "No title".to_string());
+                let title = content.title.unwrap_or_else(|| "No title".to_string());
                 // Use absolute path as the storage key for local files
                 let abs_path = std::fs::canonicalize(&source)
                     .unwrap_or_else(|_| std::path::PathBuf::from(&source));

@@ -116,8 +116,7 @@ pub fn extract_from_file(path: &str) -> Result<FileContent, ReaderError> {
 
 /// Extract plain text from a PDF file.
 fn extract_pdf(path: &Path) -> Result<String, ReaderError> {
-    let text =
-        pdf_extract::extract_text(path).map_err(|e| ReaderError::PdfError(e.to_string()))?;
+    let text = pdf_extract::extract_text(path).map_err(|e| ReaderError::PdfError(e.to_string()))?;
 
     Ok(clean_extracted_text(&text))
 }
@@ -208,11 +207,7 @@ fn extract_slide_number(name: &str) -> u32 {
 /// Clean extracted text: collapse excessive whitespace, remove blank lines.
 fn clean_extracted_text(text: &str) -> String {
     text.lines()
-        .map(|line| {
-            line.split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
@@ -297,4 +292,3 @@ mod tests {
         ));
     }
 }
-
