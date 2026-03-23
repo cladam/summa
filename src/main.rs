@@ -154,7 +154,7 @@ async fn main() -> anyhow::Result<()> {
             println!("--- Checking for updates ---");
             let status = self_update::backends::github::Update::configure()
                 .repo_owner("cladam")
-                .repo_name("summa")
+                .repo_name("summera")
                 .bin_name("summera")
                 .show_download_progress(true)
                 .current_version(self_update::cargo_crate_version!())

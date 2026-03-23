@@ -9,9 +9,9 @@ use thiserror::Error;
 
 /// User-Agent string identifying this scraper
 const USER_AGENT: &str = concat!(
-    "summa/",
+    "summera/",
     env!("CARGO_PKG_VERSION"),
-    " (https://github.com/cladam/summa)"
+    " (https://github.com/cladam/summera)"
 );
 
 /// Default timeout for HTTP requests

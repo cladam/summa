@@ -1,6 +1,6 @@
-//! # Summa
+//! # Summera
 //!
-//! A TUI application for intelligent webpage summarization using LLMs.
+//! A TUI application for intelligent webpage summarisation using LLMs.
 //!
 //! ## Features
 //!

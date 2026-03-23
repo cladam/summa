@@ -25,8 +25,8 @@ pub struct SearchIndex {
 }
 
 impl SearchIndex {
-    /// Open or create a search index at the given path
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, SearchError> {
+    /// Build the expected schema for the search index.
+    fn build_schema() -> Schema {
         let mut schema_builder = Schema::builder();
         schema_builder.add_text_field("url", TEXT | STORED);
         schema_builder.add_text_field("title", TEXT | STORED);
@@ -34,13 +34,36 @@ impl SearchIndex {
         schema_builder.add_text_field("key_points", TEXT);
         schema_builder.add_text_field("entities", TEXT);
         schema_builder.add_text_field("action_items", TEXT);
-        let schema = schema_builder.build();
+        schema_builder.build()
+    }
 
+    /// Open or create a search index at the given path.
+    ///
+    /// If the existing index has a different schema (e.g. from a previous
+    /// version), the old index is deleted and recreated so that field handles
+    /// stay consistent and we avoid out-of-bounds panics in tantivy.
+    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, SearchError> {
+        let schema = Self::build_schema();
         let index_path = path.as_ref();
         std::fs::create_dir_all(index_path)?;
 
-        let index = Index::create_in_dir(index_path, schema.clone())
-            .or_else(|_| Index::open_in_dir(index_path))?;
+        // Try creating a fresh index first (fast path for new installs).
+        let index = match Index::create_in_dir(index_path, schema.clone()) {
+            Ok(idx) => idx,
+            Err(_) => {
+                // Index already exists – open it and verify its schema.
+                let existing = Index::open_in_dir(index_path)?;
+                if existing.schema() == schema {
+                    existing
+                } else {
+                    // Schema mismatch – rebuild the index from scratch.
+                    eprintln!("Search index schema changed; rebuilding index…");
+                    std::fs::remove_dir_all(index_path)?;
+                    std::fs::create_dir_all(index_path)?;
+                    Index::create_in_dir(index_path, schema.clone())?
+                }
+            }
+        };
 
         Ok(Self { index, schema })
     }

@@ -123,7 +123,7 @@ export OPENAI_API_KEY="your-api-key"
 
 ## Data Storage
 
-Summa stores data in two locations within the configured storage path:
+Summera stores data in two locations within the configured storage path:
 
 - **sled database**: Stores full summary data with timestamps
 - **tantivy index**: Full-text search index for fast querying
